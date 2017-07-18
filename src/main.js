@@ -1,9 +1,11 @@
 'use strict'
 
 class Lawos {
-  constructor (queueUrl, sqs, lambda) {
-    this.maxMessages = 10
+  constructor (queueUrl, sqs={}, lambda) {
+
+    this.maxMessages = sqs.maxMessages || 10
     this.queueUrl = queueUrl
+    this.waitTime = sqs.waitTime || null
     this.aws = {
       sqs: sqs,
       lambda: lambda
@@ -16,7 +18,9 @@ class Lawos {
 
     this.metrics = {
       processed: 0,
-      iteration: 0
+      resolved: 0,
+      rejected: 0,
+      iterations: 0
     }
 
     if (!this.queueUrl) {
@@ -70,21 +74,17 @@ class Lawos {
       {
         MaxNumberOfMessages: this.maxMessages,
         MessageAttributeNames: ['All'],
-        QueueUrl: this.queueUrl
+        QueueUrl: this.queueUrl,
+        WaitTimeSeconds: this.waitTime
       }
     ).promise().then(
-      data => {
-        this.metrics.iteration += 1
-
-        return data
-      }
-    ).then(
       list => {
+        this.metrics.iterations += 1
         if (list && list.Messages) {
           return list.Messages
         }
 
-        this.quit()
+        return this.quit()
       }
     )
   }
@@ -102,27 +102,49 @@ class Lawos {
   }
 
   process (list) {
+    let results = []
     return Promise.all(
       list.map(
         item => {
           this.metrics.processed += 1
 
           return this.handleItem(item)
+          .then(result => {
+            this.metrics.resolved += 1
+            return {
+              item,
+              result,
+              success: true
+            }
+          })
+          .catch(error => {
+            this.metrics.rejected += 1
+            return {
+              item,
+              error,
+              success: false
+            }
+          })
         }
       )
     ).then(
-      () => list
-    ).then(
-      data => this.handleList(data)
-    ).then(
-      Promise.all(
-        list.map(
-          item => this.delete(item.ReceiptHandle)
+      itemResults => {
+        results = itemResults
+      }
+    )
+    .then(
+      () => this.handleList(results.map(r => r.item))
+    ).then(() => Promise.all(
+        results.map(
+          result => result.success ? this.delete(result.item.ReceiptHandle) : null
         )
       )
     ).then(
-      () => list
-    )
+      () => results
+    ).catch(e => {
+      Promise.resolve()
+      console.log(e)
+    });
   }
 
   quit () {

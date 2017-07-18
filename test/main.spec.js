@@ -1,3 +1,5 @@
+/* For some reason Intellij Idea wasn't picking up the "envs" property in package.json */
+/* eslint-env jest */
 'use strict'
 
 const Lawos = require('../')
@@ -132,7 +134,7 @@ it('stops with condition resolve(true)', () => {
   ).then(
     () => expect(Q.metrics.processed).toBe(0)
   ).then(
-    () => expect(Q.metrics.iteration).toBe(0)
+    () => expect(Q.metrics.iterations).toBe(0)
   ).then(
     () => expect(counterProcessed).toBe(0)
   ).then(
@@ -293,7 +295,7 @@ it('work runs condition check and loads data', () => {
       return Promise.resolve(counter < 0)
     }
   ).then(
-    () => expect(Q.metrics.iteration).toBe(5)
+    () => expect(Q.metrics.iterations).toBe(5)
   ).then(
     () => expect(Q.metrics.processed).toBe(10)
   ).then(
@@ -350,7 +352,7 @@ it('trigger Lambda task to process message', () => {
   ).then(
     () => expect(Q.metrics.processed).toBe(3)
   ).then(
-    () => expect(Q.metrics.iteration).toBe(2)
+    () => expect(Q.metrics.iterations).toBe(2)
   ).then(
     () => expect(counterLambda).toBe(3)
   ).then(
@@ -375,3 +377,44 @@ it('process real queue', () => {
     console.log
   );
 }); */
+
+it('only deletes resolved items', () => {
+  const msgs = {
+    Messages: [
+      { ReceiptHandle: 'a' },
+      { ReceiptHandle: 'b' },
+      { ReceiptHandle: 'c' }
+    ]
+  }
+
+  const Q = new Lawos('http://example.com', {})
+  Q.delete = jest.fn().mockReturnValue(Promise.resolve())
+  Q.handleList = jest.fn().mockReturnValue(Promise.resolve())
+
+  // mocking this in order to verify the `this.metrics.process += 1`
+  Q.aws.sqs.receiveMessage = jest.fn().mockReturnValue({
+    promise: jest.fn().mockReturnValueOnce(Promise.resolve(msgs))
+  })
+
+  Q.item(item => {
+    if (item.ReceiptHandle === 'c') {
+      return Promise.reject(new Error('some error'))
+    }
+    return Promise.resolve()
+  })
+
+  const work = jest.fn()
+    .mockReturnValueOnce(Promise.resolve(false))
+    .mockReturnValue(Promise.resolve(true))
+
+  return Q.work(work).then((stats) => {
+    expect(stats.processed).toBe(3)
+    expect(stats.rejected).toBe(1)
+    expect(stats.resolved).toBe(2)
+    expect(stats.iterations).toBe(1)
+    expect(Q.delete).toHaveBeenCalledTimes(2)
+    expect(Q.delete).toHaveBeenCalledWith('a')
+    expect(Q.delete).toHaveBeenCalledWith('b')
+    expect(Q.delete).not.toHaveBeenCalledWith('c')
+  })
+})
