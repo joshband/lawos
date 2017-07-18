@@ -2,10 +2,14 @@
 
 class Lawos {
   constructor (queueUrl, sqs={}, lambda) {
-
-    this.maxMessages = sqs.maxMessages || 10
+    this.maxMessages = 10
     this.queueUrl = queueUrl
-    this.waitTime = sqs.waitTime || null
+    this.waitTime = null
+    if(typeof queueUrl === 'object'){
+      this.maxMessages = queueUrl.maxMessages || 10
+      this.queueUrl = queueUrl.queueUrl
+      this.waitTime = queueUrl.waitTime || null
+    }
     this.aws = {
       sqs: sqs,
       lambda: lambda
