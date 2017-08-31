@@ -77,6 +77,7 @@ class Lawos {
     return this.aws.sqs.receiveMessage(
       {
         MaxNumberOfMessages: this.maxMessages,
+        AttributeNames: ['All'],
         MessageAttributeNames: ['All'],
         QueueUrl: this.queueUrl,
         WaitTimeSeconds: this.waitTime
