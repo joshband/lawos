@@ -9,6 +9,7 @@ class Lawos {
       this.maxMessages = queueUrl.maxMessages || 10
       this.queueUrl = queueUrl.queueUrl
       this.waitTime = queueUrl.waitTime || null
+      this.greedy = queueUrl.greedy || false
     }
     this.aws = {
       sqs: sqs,
@@ -89,7 +90,11 @@ class Lawos {
           return list.Messages
         }
 
-        return this.quit()
+        if(this.greedy){
+          return [];
+        }else{
+          return this.quit()
+        }
       }
     )
   }
