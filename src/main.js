@@ -16,6 +16,8 @@ class Lawos {
       lambda: lambda
     }
 
+    this.done = false
+
     this.handler = {
       item: () => Promise.resolve(),
       list: () => Promise.resolve()
@@ -91,12 +93,16 @@ class Lawos {
         }
 
         if(this.greedy){
+          this.done = true
           return [];
         }else{
           return this.quit()
         }
       }
     )
+      .catch(e => {
+        throw e
+      })
   }
 
   list (func) {
@@ -137,24 +143,21 @@ class Lawos {
           })
         }
       )
-    ).then(
-      itemResults => {
+    )
+      .then(itemResults => {
         results = itemResults
       }
     )
-    .then(
+      .then(
       () => this.handleList(results.map(r => r.item))
-    ).then(() => Promise.all(
+    )
+      .then(() => Promise.all(
         results.map(
           result => result.success ? this.delete(result.item.ReceiptHandle) : null
         )
       )
-    ).then(
-      () => results
-    ).catch(e => {
-      Promise.resolve()
-      console.log(e)
-    });
+    )
+      .then(() => results)
   }
 
   quit () {
@@ -164,7 +167,7 @@ class Lawos {
   work (condition) {
     return condition().then(
       stop => {
-        if (stop) {
+        if (stop || this.done) {
           return this.quit()
         }
 
@@ -173,9 +176,16 @@ class Lawos {
         ).then(
           () => this.work(condition)
         )
+          .catch(e => {
+            // make it bubble up
+            throw e
+          })
       }
     ).catch(
-      () => this.quit()
+      err => {
+        this.metrics.queueError = err
+        return this.quit()
+      }
     )
   }
 }
