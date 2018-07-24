@@ -10,6 +10,7 @@ class Lawos {
       this.queueUrl = queueUrl.queueUrl
       this.waitTime = queueUrl.waitTime || null
       this.greedy = queueUrl.greedy || false
+      this.removeReceived = queueUrl.removeReceived || false
     }
     this.aws = {
       sqs: sqs,
@@ -153,7 +154,7 @@ class Lawos {
     )
       .then(() => Promise.all(
         results.map(
-          result => result.success ? this.delete(result.item.ReceiptHandle) : null
+          result => result.success && this.removeReceived ? this.delete(result.item.ReceiptHandle) : null
         )
       )
     )
